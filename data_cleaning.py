@@ -6,7 +6,7 @@ from io import StringIO
 # Load raw data
 URL = 'https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-11-03/ikea.csv'
 
-def get_data_ikea(url: str, local_path: str = 'IZStepProject/ikea.csv', timeout: int = 30) -> pd.DataFrame | None:
+def get_data_ikea(url: str, local_path: str = 'IZStepProjectPython/ikea.csv', timeout: int = 30) -> pd.DataFrame | None:
     try:
         r = requests.get(url, timeout=timeout)
         r.raise_for_status()
@@ -66,6 +66,9 @@ mask_full = df[dims].notna().all(axis=1)
 df_full = df.loc[mask_full].copy()
 df_miss = df.loc[~mask_full].copy()
 
+mask_full.value_counts()
+df_full.shape, df_miss.shape
+
 # 5) Drop dups by designer_norm + dimensions
 subset_dims = ['designer_norm'] + dims
 dups_dims_n = df_full.duplicated(subset=subset_dims, keep=False).sum()
@@ -95,7 +98,7 @@ df = df.loc[mask_pos].reset_index(drop=True)
 print(f'Removed non-positive sizes: {before - len(df)} rows')
 
 # Save cleaned dataset
-out_path = 'IZStepProject/ikea_clean.csv'
+out_path = 'IZStepProjectPython/ikea_clean.csv'
 os.makedirs(os.path.dirname(out_path), exist_ok=True)
 df.to_csv(out_path, index=False, encoding='utf-8')
 print(f'[Done] Saved: {out_path}  |  shape={df.shape}')

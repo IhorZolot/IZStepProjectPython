@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # 1. Load cleaned data
-df = pd.read_csv('IZStepProject/ikea_clean.csv')
+df = pd.read_csv('IZStepProjectPython/ikea_clean.csv')
 
 num_cols = ['price', 'depth', 'height', 'width']
 cat_cols = ['name', 'category', 'other_colors', 'designer_norm', 'short_description']

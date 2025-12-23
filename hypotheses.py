@@ -6,7 +6,7 @@ from numpy.random import default_rng
 from scipy.stats import mannwhitneyu, spearmanr, kruskal, ttest_ind, gaussian_kde
 
 # 1. Load cleaned data
-df = pd.read_csv('IZStepProject/ikea_clean.csv')
+df = pd.read_csv('IZStepProjectPython/ikea_clean.csv')
 
 mask_pos = df['price'].notna() & (df['price'] >= 0)
 df = df.loc[mask_pos].reset_index(drop=True)

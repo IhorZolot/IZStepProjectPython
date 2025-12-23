@@ -18,7 +18,7 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 
 # 1. Load cleaned data
-df = pd.read_csv('IZStepProject/ikea_clean.csv')
+df = pd.read_csv('IZStepProjectPython/ikea_clean.csv')
 
 cols = ['price', 'depth', 'width', 'height', 'category', 'other_colors', 'designer_norm']
 df = df[cols].copy()
