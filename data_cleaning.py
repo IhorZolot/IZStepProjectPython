@@ -66,8 +66,8 @@ mask_full = df[dims].notna().all(axis=1)
 df_full = df.loc[mask_full].copy()
 df_miss = df.loc[~mask_full].copy()
 
-mask_full.value_counts()
-df_full.shape, df_miss.shape
+print(mask_full.value_counts())
+print(df_full.shape, df_miss.shape)
 
 # 5) Drop dups by designer_norm + dimensions
 subset_dims = ['designer_norm'] + dims
