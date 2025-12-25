@@ -66,9 +66,6 @@ mask_full = df[dims].notna().all(axis=1)
 df_full = df.loc[mask_full].copy()
 df_miss = df.loc[~mask_full].copy()
 
-print(mask_full.value_counts())
-print(df_full.shape, df_miss.shape)
-
 # 5) Drop dups by designer_norm + dimensions
 subset_dims = ['designer_norm'] + dims
 dups_dims_n = df_full.duplicated(subset=subset_dims, keep=False).sum()
@@ -97,14 +94,8 @@ mask_pos = (
 df = df.loc[mask_pos].reset_index(drop=True)
 print(f'Removed non-positive sizes: {before - len(df)} rows')
 
-# Save cleaned dataset
-out_path = 'IZStepProjectPython/ikea_clean.csv'
-os.makedirs(os.path.dirname(out_path), exist_ok=True)
-df.to_csv(out_path, index=False, encoding='utf-8')
-print(f'[Done] Saved: {out_path}  |  shape={df.shape}')
+# EDA / Data Quality: check sentinel values (1–2) in dimensions (depth/width/height)
 
-
-# Example inspection
 for c in dims:
     print(c, "== 1:", (df[c] == 1).sum(), "| non-null:", df[c].notna().sum())
 
@@ -116,6 +107,11 @@ for c in dims:
     print(df[c].dropna().value_counts().head(10))  
     print("min:", df[c].min(), "5 smallest:", df[c].dropna().nsmallest(5).tolist())
 
-
 for c in dims:
     print(c, "<=1:", (df[c] <= 1).sum(), "| <=2:", (df[c] <= 2).sum())
+
+# Save cleaned dataset
+out_path = 'IZStepProjectPython/ikea_clean.csv'
+os.makedirs(os.path.dirname(out_path), exist_ok=True)
+df.to_csv(out_path, index=False, encoding='utf-8')
+print(f'[Done] Saved: {out_path}  |  shape={df.shape}')
