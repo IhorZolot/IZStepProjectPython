@@ -8,7 +8,7 @@ from scipy.stats import mannwhitneyu, spearmanr, kruskal, ttest_ind, gaussian_kd
 # 1. Load cleaned data
 df = pd.read_csv('IZStepProjectPython/ikea_clean.csv')
 
-mask_pos = df['price'].notna() & (df['price'] >= 0)
+mask_pos = df['price'].notna() & (df['price'] > 0)
 df = df.loc[mask_pos].reset_index(drop=True)
 df['price_ln'] = np.log1p(df['price'])
 print(df[['price', 'price_ln']].head(10))

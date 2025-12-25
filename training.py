@@ -94,18 +94,6 @@ for X_part in (X_train, X_test):
           .map(median_by_dsgn)
           .fillna(global_median_price)
     )
-    
-# for X_part in (X_train, X_test):
-#     X_part['volume'] = (
-#         X_part['depth'] * X_part['width'] * X_part['height']
-#     )
-
-#     X_part['category_median_price'] = X_part['category'].map(median_by_cat)
-#     X_part['designer_median_price'] = (
-#         X_part['designer_norm']
-#           .map(median_by_dsgn)
-#           .fillna(global_median_price)
-#     )
 
 numeric_features_alt = [
     'depth', 'width', 'height',

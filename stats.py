@@ -46,7 +46,7 @@ plt.show()
 
 price_by_category = (
     df.groupby('category', as_index=False)['price']
-    .mean()
+    .median()
     .sort_values('price', ascending=False)
 )
 
@@ -57,7 +57,6 @@ ax.set_title('Median price by category', fontsize=14, fontweight='bold')
 ax.set_xlabel('Category', fontweight='bold')
 ax.set_ylabel('Median price', fontweight='bold')
 plt.xticks(rotation=30, ha='right')
-
 ax.bar_label(ax.containers[0], fontsize=9, padding=1.5, fmt='%.0f')
 
 plt.tight_layout()
@@ -91,22 +90,16 @@ plt.show()
 
 # # 4. Visualization of the number of products by designer
 
-designer_counts = (
-      df['designer_norm']
-      .value_counts()   
-      .head(15)
-      ) 
+designer_counts = df['designer_norm'].value_counts().head(15)
 
 fig, ax = plt.subplots(figsize=(12,6))
-designer_counts.plot(kind='bar', ax=ax, x='designer_norm', y='count', legend=False)
+designer_counts.plot(kind='bar', ax=ax, legend=False)
 
 ax.set_title('Top 15 designers by number of products', fontsize=14, fontweight='bold')
 ax.set_xlabel('Designer', fontweight='bold')
 ax.set_ylabel('Number of products', fontweight='bold')
 plt.xticks(rotation=30, ha='right')
-
 ax.bar_label(ax.containers[0], fontsize=9, padding=1.5, fmt='%.0f')
-
 plt.tight_layout()
 plt.show()
 
@@ -148,7 +141,7 @@ labels = [label_map['No'], label_map['Yes']]
 
 ax[1].boxplot(
     [prices_no, prices_yes],
-    labels=labels,
+    tick_labels=labels,
     showfliers=False 
 )
 
@@ -167,51 +160,56 @@ plt.show()
 
 df_online = df.dropna(subset=['price', 'sellable_online']).copy()
 
-online_stats = (
-    df_online
-      .groupby('sellable_online')['price']
-      .agg(
-          n_items='size',        
-          median_price='median'  
-      )
-      .round(2)
-      .reset_index()
-)
-print(online_stats)
-print(df_online.groupby('sellable_online')['price'].describe().round(2))
-
 label_map = {
     False: 'Not sold online',
     True:  'Sold online',
 }
+
+online_stats = (
+    df_online.groupby('sellable_online')['price']
+             .agg(n_items='size', median_price='median')
+             .round(2)
+             .reset_index()
+)
 online_stats['label'] = online_stats['sellable_online'].map(label_map)
+
+print(online_stats)
+print(df_online.groupby('sellable_online')['price'].describe().round(2))
+
+prices_off = df_online.loc[df_online['sellable_online'] == False, 'price'].dropna()
+prices_on  = df_online.loc[df_online['sellable_online'] == True,  'price'].dropna()
 
 fig, ax = plt.subplots(1, 2, figsize=(14, 6))
 
 ax[0].pie(
     online_stats['n_items'],
     labels=online_stats['label'],
-    autopct='%.0f%%',
-    startangle=90,
+    autopct='%.1f%%',
+    startangle=90
 )
-
 ax[0].set_title(
     'Share of items: sold / not sold online',
     fontsize=14,
     fontweight='bold'
 )
 
-ax[1].pie(
-    online_stats['median_price'],
-    labels=online_stats['label'],
-    autopct='%.1f%%',
-    startangle=90
+ax[1].boxplot(
+    [prices_off, prices_on],
+    labels=[label_map[False], label_map[True]],
+    showfliers=False
 )
 ax[1].set_title(
-    'Relative median price: sold / not sold online',
+    'Price distribution: sold / not sold online',
     fontsize=14,
     fontweight='bold'
 )
+ax[1].set_xlabel('Sellable online', fontweight='bold')
+ax[1].set_ylabel('Price', fontweight='bold')
+
+med_off = prices_off.median()
+med_on  = prices_on.median()
+ax[1].text(1, med_off, f'Median: {med_off:.0f}', va='bottom', ha='center', fontsize=9)
+ax[1].text(2, med_on,  f'Median: {med_on:.0f}',  va='bottom', ha='center', fontsize=9)
 
 plt.tight_layout()
 plt.show()
@@ -288,7 +286,7 @@ plt.show()
 
 1. Найбільше товарів у категорії “Bookcases & shelving units” (432 позиції), далі “Chairs” (392) та “Tables & desks” (365). Натомість найменше товарів у категоріях “Sideboards, buffets & console tables” (6) та “Room dividers” (9). Асортимент зосереджений на масових категоріях для щоденного використання, тоді як спеціалізовані меблі покриваються мінімально, скоріше “для галочки”, ніж як головний напрям бізнесу. 
 
-2. Тут ми вже дивимось не на кількість, а на медіанну ціну в категорії. Найдорожчі категорії за медіанною ціною – це Wardrobes (~2065), Sofas & armchairs (~1843) та Beds (~1457). Тобто шафи, дивани й ліжка – найбільш «дорогі» типи меблів. Найдешевші категорії – це Children’s furniture (~272), Nursery furniture (~393), Café furniture (~468) та Bookcases & shelving units(~471). Це може означати, що найбільший внесок у виручку за штуку йде від великих предметів спальні/вітальні (шафи, дивани, ліжка), а дитячі й частина зберігання позиціонуються як більш бюджетні сегменти. Також помітно, що Bookcases & shelving units, де найбільше товарів за кількістю, мають відносно низьку медіанну ціну — тобто це масовий, але недорогий сегмент.
+2. Тут ми вже дивимось не на кількість, а на медіанну ціну в категорії. Найдорожчі категорії за медіанною ціною – це Wardrobes (~1608), Sofas & armchairs (~955) та Beds (~920). Тобто шафи, дивани й ліжка – найбільш «дорогі» типи меблів. Найдешевші категорії – це Children’s furniture (~175), Bookcases & shelving units(~234), Nursery furniture (~305), Café furniture (~397). Це може означати, що найбільший внесок у виручку за штуку йде від великих предметів спальні/вітальні (шафи, дивани, ліжка), а дитячі й частина зберігання позиціонуються як більш бюджетні сегменти. Також помітно, що Bookcases & shelving units, де найбільше товарів за кількістю, мають відносно низьку медіанну ціну — тобто це масовий, але недорогий сегмент.
 
 3. Найсильніші зв’язки – з шириною (0.71) та глибиною (0.65). Тобто чим ширший і глибший предмет, тим, як правило, дорожчий. З висотою зв’язок слабкий (0.25). Висота сама по собі майже не пояснює ціну – важливіше, скільки місця меблі займають по площі, а не по висоті. Між самими розмірами є лише помірні кореляції, а depth–height навіть трохи від’ємна (-0.10) – тобто високі предмети не обов’язково глибокі. Кореляція між ціною та розмірами товарів є слабкою, що свідчить про те, що ціна не обов'язково залежить від фізичних розмірів. 
 
@@ -296,7 +294,7 @@ plt.show()
 
 5. Структура асортименту за кольорами ~56.7% товарів не мають додаткових кольорових варіантів. ~43.3% – мають кілька кольорів. Тобто більшість позицій продаються в одному кольорі, але частка мультиколірних теж велика – майже половина. Ціна vs наявність кольорових варіантів із boxplot видно, що: Медіанна ціна в групі “With color variants” вища, ніж у товарів без варіантів. Розкид цін теж більший: є як відносно недорогі, так і дуже дорогі товари з кількома кольорами. Отже, товари з кількома кольоровими варіантами загалом коштують дорожче й представлені в ширшому діапазоні цін, тоді як однокольорові – більш масовий і, в середньому, дешевший сегмент.
 
-6. Лівий графік — структура асортименту. Приблизно 99% а точніше майже весь асортимент товарів продаються онлайн, і лише ~1% — тільки офлайн.  Правий графік — відносна медіанна ціна. Якщо порівняти медіанні ціни, то на товари, що продаються онлайн, припадає ≈65% сумарної медіанної ціни, а на тільки офлайн – близько 35%. Це означає, що медіанна ціна онлайн-товарів майже вдвічі вища, ніж у товарів, які не продаються онлайн.
+6. Лівий графік — структура асортименту. Приблизно 99% а точніше майже весь асортимент товарів продаються онлайн, і лише ~1% — тільки офлайн.  Правий графік — відносна медіанна ціна. Якщо порівняти медіанні ціни, то на товари, що продаються онлайн, припадає ≈65% сумарної медіанної ціни, а на тільки офлайн – близько ~35%. Це означає, що медіанна ціна онлайн-товарів майже вдвічі вища, ніж у товарів, які не продаються онлайн.
 
 7. Тут видно «онлайн-зріз» того, що ми вже бачили по всьому асортименту: Найбільше товарів онлайн у категоріях Bookcases & shelving units (431), Chairs (389), Tables & desks (364), Sofas & armchairs (337). Тобто основні категорії зберігання й сидіння максимально представлені в онлайн-каналі. Далі йдуть Outdoor furniture, Beds, Cabinets & cupboards, Wardrobes, Chests of drawers, TV & media furniture – теж масові категорії для дому. Оскільки числа майже збігаються з загальною кількістю товарів у цих категоріях, можна сказати, що майже весь ключовий асортимент цих меблів доступний онлайн – саме на них IKEA робить основний онлайн-фокус.
 

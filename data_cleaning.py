@@ -102,3 +102,20 @@ out_path = 'IZStepProjectPython/ikea_clean.csv'
 os.makedirs(os.path.dirname(out_path), exist_ok=True)
 df.to_csv(out_path, index=False, encoding='utf-8')
 print(f'[Done] Saved: {out_path}  |  shape={df.shape}')
+
+
+# Example inspection
+for c in dims:
+    print(c, "== 1:", (df[c] == 1).sum(), "| non-null:", df[c].notna().sum())
+
+mask_ones = (df[dims] == 1).any(axis=1)
+df.loc[mask_ones, ['name', 'category', 'price'] + dims].head(30)
+
+for c in dims:
+    print("\n", c)
+    print(df[c].dropna().value_counts().head(10))  
+    print("min:", df[c].min(), "5 smallest:", df[c].dropna().nsmallest(5).tolist())
+
+
+for c in dims:
+    print(c, "<=1:", (df[c] <= 1).sum(), "| <=2:", (df[c] <= 2).sum())
