@@ -1,17 +1,34 @@
 import numpy as np
 import pandas as pd
-from scipy import stats
 import matplotlib.pyplot as plt
 from numpy.random import default_rng
-from scipy.stats import mannwhitneyu, spearmanr, kruskal, ttest_ind, gaussian_kde
+from sklearn.linear_model import LinearRegression
+from scipy.stats import mannwhitneyu, spearmanr, kruskal, ttest_ind, shapiro, pearsonr, f_oneway, levene, gaussian_kde
 
 # 1. Load cleaned data
 df = pd.read_csv('IZStepProjectPython/ikea_clean.csv')
-
-mask_pos = df['price'].notna() & (df['price'] > 0)
-df = df.loc[mask_pos].reset_index(drop=True)
+df = df[df['price'].notna() & (df['price'] > 0)].reset_index(drop=True)
 df['price_ln'] = np.log1p(df['price'])
-print(df[['price', 'price_ln']].head(10))
+df_base = df.copy()
+
+dims = ['depth', 'height', 'width']
+def make_volume_df(df_in, dims=None, group_col='category'):
+    if dims is None:
+        dims = ['depth','height','width']
+    dfv = df_in.copy()
+    for col in dims:
+        dfv[col] = pd.to_numeric(dfv[col], errors='coerce')
+        dfv.loc[dfv[col] <= 0, col] = np.nan
+
+    dfv[list(dims)] = dfv[list(dims)].fillna(dfv.groupby(group_col)[list(dims)].transform('median'))
+    dfv = dfv.dropna(subset=list(dims)).copy()
+
+    dfv['volume'] = dfv['depth'] * dfv['height'] * dfv['width']
+    dfv = dfv[dfv['volume'] > 0].copy()
+    dfv['volume_ln'] = np.log(dfv['volume'])
+    return dfv
+
+df_vol = make_volume_df(df_base)
 
 # Hypothesis 1. Products with color options are more expensive
 
@@ -60,7 +77,7 @@ prices_no_ln  = df_colors.loc[df_colors['other_colors'] == 'No',  'price_ln']
 print("")
 print(len(prices_yes), len(prices_no))
 
-# Test Mann–Whitney U 
+# Test Mann - Whitney U 
 
 stat, p_value = mannwhitneyu(
     prices_yes,
@@ -76,13 +93,13 @@ else:
     print(f'p-value = {p_value:.4f} ≥ {alpha} fail to reject H0')
     print('Conclusion: there is not enough evidence to claim that products with color variations are more expensive.')
 
-# Test Shapiro–Wilk
+# Test Shapiro - Wilk
 
 sample_yes = prices_yes_ln.sample(min(500, len(prices_yes_ln)), random_state=0)
 sample_no  = prices_no_ln.sample(min(500, len(prices_no_ln)), random_state=0)
 
-sh_yes = stats.shapiro(sample_yes)
-sh_no  = stats.shapiro(sample_no)
+sh_yes = shapiro(sample_yes)
+sh_no  = shapiro(sample_no)
 
 alpha = 0.05
 print("")
@@ -114,33 +131,21 @@ else:
     print("Conclusion: there is no statistically significant difference in mean log price between the groups.")
     
 # Test Bootstrap
-def bootstrap_diff_means(x, y, n_boot=10_000, func=np.mean, random_state=0):
+def bootstrap_diff_means_ci(x, y, n_boot=10_000, func=np.mean, random_state=0):
     rng = np.random.default_rng(random_state)
     x = np.asarray(x)
     y = np.asarray(y)
-
-    obs = func(x) - func(y) 
-
+    obs = func(x) - func(y)
     diffs = np.empty(n_boot)
     for i in range(n_boot):
-        x_s = rng.choice(x, size=len(x), replace=True)
-        y_s = rng.choice(y, size=len(y), replace=True)
-        diffs[i] = func(x_s) - func(y_s)
+        diffs[i] = func(rng.choice(x, size=len(x), replace=True)) - func(rng.choice(y, size=len(y), replace=True))
+    ci_low, ci_high = np.quantile(diffs, [0.025, 0.975])
+    return obs, (ci_low, ci_high), diffs
 
-    p_value = (np.abs(diffs) >= abs(obs)).mean()
-    return obs, p_value, diffs
-
-obs_raw, p_raw, diffs_raw = bootstrap_diff_means(prices_yes, prices_no)
+obs_ln, ci_ln, diffs_ln = bootstrap_diff_means_ci(prices_yes_ln, prices_no_ln)
 print("")
-print('Bootstrap (price):')
-print('  diff_mean =', obs_raw)
-print('  p-value   =', p_raw)
-
-obs_ln, p_ln, diffs_ln = bootstrap_diff_means(prices_yes_ln, prices_no_ln)
-print("")
-print('Bootstrap (log price):')
-print('  diff_mean =', obs_ln)
-print('  p-value   =', p_ln)
+print("Bootstrap diff mean (log price):", obs_ln, "95% CI:", ci_ln)
+print("Zero in CI?" , ci_ln[0] <= 0 <= ci_ln[1])
 
 # Visualizations
 
@@ -172,6 +177,12 @@ def ecdf(data):
     return x, y
 x_no,  y_no  = ecdf(prices_no_ln)
 x_yes, y_yes = ecdf(prices_yes_ln)
+
+obs_raw, ci_raw, diffs_raw = bootstrap_diff_means_ci(prices_yes, prices_no)
+print("Bootstrap diff mean (price):", obs_raw, "95% CI:", ci_raw)
+
+obs_ln, ci_ln, diffs_ln = bootstrap_diff_means_ci(prices_yes_ln, prices_no_ln)
+print("Bootstrap diff mean (log price):", obs_ln, "95% CI:", ci_ln)
 
 plt.figure(figsize=(10, 6))
 plt.step(x_no,  y_no,  where='post', label='No color variants')
@@ -218,100 +229,113 @@ plt.show()
 
 # Hypothesis 2. The larger the volume of the product, the higher the price
 
-dims = ['depth', 'height', 'width']
-for col in dims:
-  df[col] = pd.to_numeric(df[col], errors='coerce')
-
-for col in dims:
-  df.loc[df[col] <= 0, col] = np.nan
-
-group_means = df.groupby('category')[dims].transform('mean')
-df[dims] = df[dims].fillna(group_means)
-df_vol = df.dropna(subset=dims).copy()
-
-df_vol['volume'] = (
-    df_vol['depth'] *
-    df_vol['height'] *
-    df_vol['width']
-)
-
-df_vol = df_vol[df_vol['volume'] > 0].copy()
-df_vol['volume_ln'] = np.log(df_vol['volume'])
+df_vol = make_volume_df(df_base)
 
 print('')
 print(df_vol[['price', 'price_ln', 'volume', 'volume_ln']].head())
 print(df_vol[dims + ['volume']].describe().round(2))
 
 # Test 1: Spearman correlation
-
 rho_raw, p_raw = spearmanr(df_vol['price'], df_vol['volume'])
 rho_ln,  p_ln  = spearmanr(df_vol['price_ln'], df_vol['volume_ln'])
 
 print('')
 print('Spearman (price vs volume):    rho =', rho_raw, 'p =', p_raw)
 print('Spearman (log price vs log V): rho =', rho_ln,  'p =', p_ln)
-    
-# Test 2: Permutation test for correlation (or for β in linear regression)
 
+# Test 2: Permutation test for correlation (Pearson r on log-log)
 def permutation_corr(x, y, n_perm=10_000, random_state=0):
     rng = np.random.default_rng(random_state)
     x = np.asarray(x)
     y = np.asarray(y)
 
-    obs_r, _ = stats.pearsonr(x, y)
+    obs_r, _ = pearsonr(x, y)
 
     perm_rs = np.empty(n_perm)
     for i in range(n_perm):
         y_perm = rng.permutation(y)
-        r_perm, _ = stats.pearsonr(x, y_perm)
+        r_perm, _ = pearsonr(x, y_perm)
         perm_rs[i] = r_perm
 
-    p_value = (np.abs(perm_rs) >= abs(obs_r)).mean()
+    # ✅ +1 correction to avoid p=0.0
+    p_value = (np.sum(np.abs(perm_rs) >= abs(obs_r)) + 1) / (n_perm + 1)
     return obs_r, p_value, perm_rs
 
 obs_r, p_perm, perm_rs = permutation_corr(
     df_vol['volume_ln'].values,
     df_vol['price_ln'].values
 )
+
 print('')
 print('Permutation test for Pearson r (log-log):')
 print('  r       =', obs_r)
 print('  p-value =', p_perm)
 
 # Test 3: Volume partitioning + Kruskal–Wallis
-
 df_vol['volume_quartile'] = pd.qcut(
     df_vol['volume'], 4,
-    labels=['Q1 (smallest)', 'Q2', 'Q3', 'Q4 (largest)']
+    labels=['Q1 (smallest)', 'Q2', 'Q3', 'Q4 (largest)'],
+    duplicates='drop'
 )
 print('')
 print(df_vol['volume_quartile'].value_counts())
 
 group_price_stats = (
-    df_vol
-      .groupby('volume_quartile', observed=True)['price']
-      .agg(n_items='size', median_price='median', mean_price='mean')
-      .round(2)
+    df_vol.groupby('volume_quartile', observed=True)['price']
+          .agg(n_items='size', median_price='median', mean_price='mean')
+          .round(2)
 )
 print(group_price_stats)
 
-groups = [
-    g['price'].values
-    for _, g in df_vol.groupby('volume_quartile', observed=True)
-]
+groups = [g['price'].values for _, g in df_vol.groupby('volume_quartile', observed=True)]
 stat_kw, p_kw = kruskal(*groups)
 
 print('Kruskal–Wallis (price ~ volume_quartile):')
 print('  statistic =', stat_kw)
 print('  p-value   =', p_kw)
 
-# Visualizations
+# ✅ Extra plot: median price by quartile
+plt.figure(figsize=(7, 4))
+group_price_stats['median_price'].plot(kind='bar')
+plt.title('Median price by volume quartile')
+plt.xlabel('Volume quartile')
+plt.ylabel('Median price')
+plt.tight_layout()
+plt.show()
 
+# Test 4: Linear regression with category control (beta)
+df_vol_reg = df_vol.dropna(subset=['category']).copy()
+X = pd.get_dummies(df_vol_reg[['volume_ln', 'category']], drop_first=True)
+y = df_vol_reg['price_ln'].values
+
+lr = LinearRegression().fit(X, y)
+beta = lr.coef_[X.columns.get_loc('volume_ln')]
+
+print('')
+print('Linear regression (log price ~ log volume + category dummies):')
+print('beta =', beta)
+print(f'Interpretation: +10% volume -> ~ +{beta*10:.2f}% price (approx.)')
+
+# ✅ Prepare plot annotations and a simple trend line for visualization
+stats_text = (
+    f"Spearman ρ = {rho_raw:.3f}\n"
+    f"Pearson r (log-log) = {obs_r:.3f}\n"
+    f"β (control category) = {beta:.3f}"
+)
+
+lr_simple = LinearRegression().fit(df_vol[['volume_ln']], df_vol['price_ln'])
+x_line = np.linspace(df_vol['volume_ln'].min(), df_vol['volume_ln'].max(), 200)
+x_line_df = pd.DataFrame({'volume_ln': x_line})
+y_line = lr_simple.predict(x_line_df)
+
+# Visualizations
 plt.figure(figsize=(8, 6))
 plt.scatter(df_vol['volume_ln'], df_vol['price_ln'], alpha=0.3, s=10)
+plt.plot(x_line, y_line, linewidth=2)
 plt.xlabel('log(volume)')
 plt.ylabel('log(price)')
 plt.title('log(price) vs log(volume)')
+plt.text(0.02, 0.98, stats_text, transform=plt.gca().transAxes, va='top')
 plt.tight_layout()
 plt.show()
 
@@ -321,6 +345,7 @@ plt.xlabel('log(volume)')
 plt.ylabel('log(price)')
 plt.title('log(price) vs log(volume) (hexbin)')
 plt.colorbar(label='count')
+plt.text(0.08, 0.94, stats_text, transform=plt.gca().transAxes, va='top', color='white')
 plt.tight_layout()
 plt.show()
 
@@ -328,7 +353,6 @@ plt.figure(figsize=(8, 5))
 plt.hist(perm_rs, bins=40, density=True, alpha=0.7)
 plt.axvline(obs_r, color='red', linestyle='--', label=f'Observed r = {obs_r:.3f}')
 plt.axvline(-obs_r, color='red', linestyle='--', alpha=0.5)
-
 plt.title('Permutation distribution of Pearson r (log(volume), log(price))')
 plt.xlabel('r')
 plt.ylabel('Density')
@@ -343,32 +367,45 @@ plt.show()
 '''
 # Hypothesis 3. The price depends on the designer
 
-df = df.dropna(subset=['designer_norm'])
-designer_counts = df['designer_norm'].value_counts()
-top_designers = designer_counts[designer_counts >= 20].index
+df_des_base = df_vol.dropna(subset=['designer_norm', 'category', 'volume_ln', 'price_ln', 'price']).copy()
 
-df_des = df[df['designer_norm'].isin(top_designers)].copy()
+designer_counts = df_des_base['designer_norm'].value_counts()
+top_designers = designer_counts[designer_counts >= 20].index
+df_des = df_des_base[df_des_base['designer_norm'].isin(top_designers)].copy()
+
 print('')
 print('Number of selected designers:', df_des['designer_norm'].nunique())
 print(df_des['designer_norm'].value_counts().head(10))
 
-# Test 1. Kruskal–Wallis on logarithmized price (nonparametric)
-
-groups_ln = [
-    g['price_ln'].values
-    for _, g in df_des.groupby('designer_norm')
-]
-# Kruskal–Wallis H-test 
-res_kw = stats.kruskal(*groups_ln)
+# Test 1: Kruskal - Wallis on price_ln
+groups_ln = [g['price_ln'].values for _, g in df_des.groupby('designer_norm')]
+res_kw = kruskal(*groups_ln)
 
 alpha = 0.05
 print('')
 if res_kw.pvalue < alpha:
-    print(f"p-value = {res_kw.pvalue:.4f} < {alpha} → reject H0")
-    print("Conclusion: the distribution of log(price) differs across designers.")
+    print(f"p-value = {res_kw.pvalue:.4g} < {alpha} → reject H0")
+    print("Conclusion: distribution of log(price) differs across designers.")
 else:
-    print(f"p-value = {res_kw.pvalue:.4f} ≥ {alpha} → fail to reject H0")
-    print("Conclusion: there is no statistically significant evidence that log(price) differs by designer.")
+    print(f"p-value = {res_kw.pvalue:.4g} ≥ {alpha} → fail to reject H0")
+    print("Conclusion: no significant evidence of differences by designer.")
+
+# ✅ Control category + volume via residuals (this MUST be outside if/else)
+X_base = pd.get_dummies(df_des[['volume_ln', 'category']], drop_first=True)
+y = df_des['price_ln'].values
+
+lr_base = LinearRegression().fit(X_base, y)
+resid = y - lr_base.predict(X_base)
+
+df_des['resid'] = resid
+
+groups_resid = [g['resid'].values for _, g in df_des.groupby('designer_norm')]
+stat_kw_resid, p_kw_resid = kruskal(*groups_resid)
+
+print('')
+print("Kruskal on residuals (designer effect beyond volume + category):")
+print("  statistic =", stat_kw_resid)
+print("  p-value   =", p_kw_resid)
 
 # Test 2. One-way ANOVA on log(price) (parametric)
 
@@ -377,12 +414,12 @@ groups_ln = [
     for _, g in df_des.groupby('designer_norm')
 ]
 
-res_lev = stats.levene(*groups_ln)
+res_lev = levene(*groups_ln)
 print('Levene test for equal variances (price_ln by designer):')
 print('  stat   =', res_lev.statistic)
 print('  p-val  =', res_lev.pvalue)
 
-res_anova = stats.f_oneway(*groups_ln)
+res_anova = f_oneway(*groups_ln)
 
 alpha = 0.05
 print("\nLevene:")
@@ -404,7 +441,7 @@ rng = default_rng(0)
 
 def anova_f_for_column(df_sub, col):
     groups = [g[col].values for _, g in df_sub.groupby('designer_norm')]
-    res = stats.f_oneway(*groups)
+    res = f_oneway(*groups)
     return res.statistic
 
 def permutation_anova_pvalue(df_sub, col, n_perm=5000, random_state=0):
@@ -427,7 +464,7 @@ def permutation_anova_pvalue(df_sub, col, n_perm=5000, random_state=0):
             g[col].values
             for _, g in df_perm.groupby('designer_perm')
         ]
-        res = stats.f_oneway(*groups)
+        res = f_oneway(*groups)
         f_perm[i] = res.statistic
 
     p_value = (f_perm >= f_obs).mean()
@@ -461,7 +498,7 @@ data_ln_by_designer = [
 plt.figure(figsize=(12, 6))
 plt.boxplot(data_ln_by_designer, tick_labels=designer_order, showfliers=False)
 plt.xticks(rotation=30, ha='right')
-plt.ylabel('log(1 + price)', fontsize=12, fontweight='bold')
+plt.ylabel('log(price)', fontsize=12, fontweight='bold')
 plt.title('Distribution of log(price) by designer (n ≥ 20)', fontsize=14, fontweight='bold')
 plt.tight_layout()
 plt.show()
