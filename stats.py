@@ -62,7 +62,7 @@ ax.bar_label(ax.containers[0], fontsize=9, padding=1.5, fmt='%.0f')
 plt.tight_layout()
 plt.show()
 
-# # 3.  Correlation matrix for numerical features 
+# 3.  Correlation matrix for numerical features 
 
 df_num = df[num_cols].copy()
 corr = df_num.corr(method='pearson')
@@ -280,6 +280,59 @@ ax.bar_label(bars, fmt='%.0f', padding=2, fontsize=8)
 plt.tight_layout()
 plt.show()
 
+# 9. Analysis of discounts: old_price vs price
+
+# print('\nold_price sample:')
+# print(df['old_price'].head(20))
+# print("\nold_price top values:")
+# print(df["old_price"].value_counts(dropna=False).head(20))
+# print("\nold_price dtype:", df["old_price"].dtype)
+
+old_num = (
+    df['old_price']
+      .astype(str)
+      .str.replace('No old price', '', regex=False)
+      .str.replace(r'[^0-9,\.]', '', regex=True)   
+      .str.replace(',', '', regex=False)           
+)
+
+df['old_price_num'] = pd.to_numeric(old_num, errors='coerce')
+
+print(df['old_price_num'].notna().sum())
+print(df[['old_price','old_price_num']].head(30))
+
+df_disc = df.dropna(subset=['price', 'old_price_num']).copy()
+df_disc = df_disc[df_disc['old_price_num'] > df_disc['price']].copy()
+
+print("Rows with discount:", len(df_disc))
+
+x = df_disc['old_price_num'].values
+y = df_disc['price'].values
+
+fig, ax = plt.subplots(figsize=(7, 7))
+ax.scatter(x, y, s=10, alpha=0.4)
+
+lims = [min(x.min(), y.min()), max(x.max(), y.max())]
+ax.plot(lims, lims)  
+ax.set_xlim(lims)
+ax.set_ylim(lims)
+
+ax.set_title('Old price vs Current price', fontsize=14, fontweight='bold')
+ax.set_xlabel('Old price', fontweight='bold')
+ax.set_ylabel('Current price', fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+df_disc['discount_pct'] = (df_disc['old_price_num'] - df_disc['price']) / df_disc['old_price_num'] * 100
+
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.hist(df_disc['discount_pct'], bins=40)
+ax.set_title('Discount distribution (%)', fontsize=14, fontweight='bold')
+ax.set_xlabel('Discount %', fontweight='bold')
+ax.set_ylabel('Count', fontweight='bold')
+plt.tight_layout()
+plt.show()
+
 '''
 Висновки: 
 Отже на першому етапі аналізу даних про продукти IKEA ми подивилися на перші 10 та останні 10 продуктів, а також подивились медіанні цифри. Після цього ми можемо зробити наступні декілька висновків:
@@ -299,5 +352,7 @@ plt.show()
 7. Тут видно «онлайн-зріз» того, що ми вже бачили по всьому асортименту: Найбільше товарів онлайн у категоріях Bookcases & shelving units (431), Chairs (389), Tables & desks (364), Sofas & armchairs (337). Тобто основні категорії зберігання й сидіння максимально представлені в онлайн-каналі. Далі йдуть Outdoor furniture, Beds, Cabinets & cupboards, Wardrobes, Chests of drawers, TV & media furniture – теж масові категорії для дому. Оскільки числа майже збігаються з загальною кількістю товарів у цих категоріях, можна сказати, що майже весь ключовий асортимент цих меблів доступний онлайн – саме на них IKEA робить основний онлайн-фокус.
 
 8. Щоб уникнути перекосів через поодинокі дорогі товари, ми аналізуємо лише тих дизайнерів, у яких у вибірці є щонайменше 20 товарів(хоча можна і 10 і 5, я зупинився на 20). Для дизайнерів, представлених 1–2 позиціями, медіанна ціна не є репрезентативною і може бути штучно завищеною. Найдорожчі колекції - це колаборації: Ehlén Johansson / IKEA of Sweden (~2525) та E Lilja Löwenhielm / K Malmvall (~1834). Тобто спільні серії з відомими дизайнерами позиціонуються як преміум. Самі по собі Ehlén Johansson (~1260), Ebba Strandmark / IKEA of Sweden (~1110), IKEA of Sweden / Ola Wihlborg (~1076) теж вище за середній рівень. Натомість “IKEA of Sweden” окремо має невисоку медіанну ціну (~205), хоча за кількістю товарів є абсолютним лідером. Отже, масовий асортимент робить внутрішня команда IKEA з більш низькими цінами, а преміум-сегмент формують спільні колекції з окремими дизайнерами, де медіанна ціна у кілька разів вища.
+
+9.У більшості товарів відсутня стара ціна (old_price = "No old price"), однак для 477 позицій вдалося визначити стару ціну та підтвердити наявність знижки (old_price > price). Scatter plot показує, що всі товари зі знижкою лежать нижче діагоналі y=x, тобто поточна ціна менша за стару. Розподіл знижок має виражені піки біля ~20% та ~40%, а також поодинокі екстремальні знижки (понад 80–90%).
 
 '''
